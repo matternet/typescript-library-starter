@@ -1,0 +1,78 @@
+version: 2.1
+
+executors:
+  circle-ci-node-executor:
+    docker:
+      - image: circleci/node:10.13.0
+    working_directory: ~/source
+
+jobs:
+  install:
+    executor: circle-ci-node-executor
+    steps:
+      - checkout
+      # Download and cache dependencies
+      - restore_cache:
+          keys:
+            - v1-dependencies-{{ checksum "package.json" }}
+            # fallback to using the latest cache if no exact match is found
+            - v1-dependencies-
+      - run: yarn install --frozen-lockfile
+      - save_cache:
+          paths:
+            - node_modules
+          key: v1-dependencies-{{ checksum "package.json" }}
+      - persist_to_workspace:
+          root: ~/source
+          paths:
+            - ./
+  lint:
+    executor: circle-ci-node-executor
+    steps:
+      - attach_workspace:
+          at: ~/source
+      - run: yarn lint
+  test:
+    executor: circle-ci-node-executor
+    steps:
+      - attach_workspace:
+          at: ~/source
+      - run: yarn test --ci
+  build:
+    executor: circle-ci-node-executor
+    steps:
+      - attach_workspace:
+          at: ~/source
+      - run: yarn build
+      - persist_to_workspace:
+          root: ~/source
+          paths:
+            - ./build
+
+workflows:
+  main:
+    jobs:
+      - install:
+          filters:
+            branches:
+              only: /.*/
+      - lint:
+          requires:
+            - install
+          filters:
+            branches:
+              only: /.*/
+      - test:
+          requires:
+            - install
+          filters:
+            branches:
+              only: /.*/
+      - build:
+          requires:
+            - install
+            - test
+            - lint
+          filters:
+            branches:
+              only: /.*/
